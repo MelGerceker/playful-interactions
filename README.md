@@ -1,4 +1,7 @@
+Project code for the course "Playful Interactions".  
 ## Setup
+Modulino library required.
+
 
 ## Useful links
 
