@@ -5,7 +5,8 @@ or Direction vectors: D=(dx, dy, dz)
 
 step 1:
 Continous calls to read roll, pitch, yaw
-can/should smooth out data
+smooth out data:
+filtered=α⋅newValue + (1−α)⋅oldFiltered for α=0.2
 
 step 2:
 turn orientation to direction vector
