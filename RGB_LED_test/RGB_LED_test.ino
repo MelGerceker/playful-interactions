@@ -35,7 +35,7 @@ void loop() {
   // DISTANCE DECREASING
   int steps = 30;
   float x0 = 1000;
-  float x_end = 10;  // almost zero
+  float x_end = 50;  // almost zero
   float r = pow(x_end / x0, 1.0 / steps);  // compute decay factor
 
   for (i = steps; i >= 0; i--) {
