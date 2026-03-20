@@ -9,6 +9,8 @@ const float a = 0.2; //smoothing factor
 bool Target_is_Hit = false;
 float current_dot_product;
 
+int battery_life =1; //0: empty, 1: 1/3, 2: 2/3, 3: full
+
 struct Vec3 {
   float x;
   float y;
@@ -49,11 +51,49 @@ int Closest_Target_Finder(Vec3 current) {
   return closest_index;
 }
 
+void Update_Battery_Life() {
+  // for now the target points are all identified as damage points
+  //later on battery should behave differently if the target point is a recharge point
+
+  switch (battery_life)
+  {
+  case 0:
+    // ALL 3 LEDS OFF
+    break;
+
+  case 1:
+    // 1 LED ON
+    break;
+
+  case 2:
+    // 2 LEDS ON
+    break;
+  
+  case 3:
+    // ALL 3 LEDS ON
+    break;
+    
+  default:
+    Serial.println("Error: Invalid battery life state");
+    break;
+  }
+
+}
+
 bool Hit_Calculator() {
   // the dot product being near equal to 1 means we are pointing at the point
   // so this method could be used to say if more than 0.95 point is hit
 
   Target_is_Hit = (current_dot_product > 0.95);
+
+  // implement check for damage vs recharge point here
+  // for now we assume all points are damage points
+  if (Target_is_Hit && battery_life > 0) {
+    battery_life--;
+    Update_Battery_Life();
+    // test that this doesnt cause the battery life to decrease by more than 1 per hit bc of the loop?
+  }
+
   return Target_is_Hit;
 }
 
@@ -86,7 +126,7 @@ void loop() {
   Vec3 current = {x, y, z};
 
   int closest_index = Closest_Target_Finder(current);
-  bool is_hit = Hit_Calculator();
+  bool is_hit = Hit_Calculator(); //already calls Update_Battery_Life() if hit is true
 
 /*
   // Get acceleration and gyroscope values
@@ -118,7 +158,7 @@ void loop() {
   Serial.println(yaw, 1);
   */
 
-  if (closest_point != -1) {
+  if (closest_index != -1) {
     Serial.println(" | Clostest point: ");
     Serial.println(points[closest_index].name);
   }
@@ -126,6 +166,7 @@ void loop() {
     if(is_hit) {
     Serial.println(" | Target Hit!");
   }
+
   
   delay(200);
 }
