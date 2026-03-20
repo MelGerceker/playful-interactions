@@ -6,6 +6,8 @@ ModulinoMovement movement;
 float x, y, z;
 float roll, pitch, yaw;
 const float a = 0.2; //smoothing factor
+bool Target_is_Hit = false;
+float current_dot_product;
 
 struct Vec3 {
   float x;
@@ -27,12 +29,10 @@ float DotProduct(Vec3 a, Vec3 b) {
   return a.x * b.x + a.y * b.y + a.z * b.z;
 }
 
-String Compare(Vec3 current) {
-  // the dot product being near equal to 1 means we are pointing at the point
-  // so this method could be used to say if more than 0.95 point is hit
+int Closest_Target_Finder(Vec3 current) {
 
   float closest_distance = -2;
-  String closest_point = "";
+  int closest_index = -1;
 
   int pointCount = sizeof(points) / sizeof(points[0]);
 
@@ -41,12 +41,20 @@ String Compare(Vec3 current) {
 
     if (closest_distance < result) {
       closest_distance = result;
-      closest_point = points[i].name;
+      closest_index = i;
+      current_dot_product = result;
     }
-
   }
 
-  return closest_point;
+  return closest_index;
+}
+
+bool Hit_Calculator() {
+  // the dot product being near equal to 1 means we are pointing at the point
+  // so this method could be used to say if more than 0.95 point is hit
+
+  Target_is_Hit = (current_dot_product > 0.95);
+  return Target_is_Hit;
 }
 
 void setup() {
@@ -74,11 +82,11 @@ void loop() {
   y = a*movement.getY() + (1-a)*y;
   z = a*movement.getZ() + (1-a)*z;
 
-  //create current dir vector!!!
   // Temporary current vector
   Vec3 current = {x, y, z};
 
-  String bestMatch = Compare(current);
+  int closest_index = Closest_Target_Finder(current);
+  bool is_hit = Hit_Calculator();
 
 /*
   // Get acceleration and gyroscope values
@@ -110,9 +118,13 @@ void loop() {
   Serial.println(yaw, 1);
   */
 
-  if (bestMatch != "") {
-    Serial.print(" | Best Match: ");
-    Serial.print(bestMatch);
+  if (closest_point != -1) {
+    Serial.println(" | Clostest point: ");
+    Serial.println(points[closest_index].name);
+  }
+
+    if(is_hit) {
+    Serial.println(" | Target Hit!");
   }
   
   delay(200);
