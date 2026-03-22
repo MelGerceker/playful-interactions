@@ -117,10 +117,11 @@ void loop() {
   // Read new movement data from the sensor
   movement.update();
 
+  //CHANGED STUFF
   //smoothed values
-  x = a*movement.getX() + (1-a)*x;
-  y = a*movement.getY() + (1-a)*y;
-  z = a*movement.getZ() + (1-a)*z;
+  x = a*(x + cos(movement.getPitch()*cos(movement.getYaw())) + (1-a)*x;
+  y = a*(x + cos(movement.getPitch()*sin(movement.getYaw())) + (1-a)*y;
+  z = a*(x + sin(movement.getPitch())) + (1-a)*z;
 
   // Temporary current vector
   Vec3 current = {x, y, z};
@@ -170,4 +171,3 @@ void loop() {
   
   delay(200);
 }
-
