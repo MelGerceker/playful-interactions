@@ -1,5 +1,15 @@
 #include "Modulino.h"
 
+const int b1Pin = 2; // Battery LED 1
+const int b2Pin = 3; // Battery LED 2
+const int b3Pin = 4; // Battery LED 3
+
+const int dataPin = 8;   // DS
+const int latchPin = 12; // ST_CP
+const int clockPin = 13; // SH_CP
+
+uint16_t radar = 0; // 16 bits for 2 shift registers (8 LEDs × 2 outputs per LED)
+
 // Create a ModulinoMovement
 ModulinoMovement movement;
 
@@ -9,7 +19,7 @@ const float a = 0.2; //smoothing factor
 bool Target_is_Hit = false;
 float current_dot_product;
 
-int battery_life =1; //0: empty, 1: 1/3, 2: 2/3, 3: full
+int battery_life = 1; //0: empty, 1: 1/3, 2: 2/3, 3: full
 
 struct Vec3 {
   float x;
@@ -59,18 +69,30 @@ void Update_Battery_Life() {
   {
   case 0:
     // ALL 3 LEDS OFF
+    digitalWrite(b1Pin, LOW);
+    digitalWrite(b2Pin, LOW);
+    digitalWrite(b3Pin, LOW);
     break;
 
   case 1:
     // 1 LED ON
+    digitalWrite(b1Pin, HIGH);
+    digitalWrite(b2Pin, LOW);
+    digitalWrite(b3Pin, LOW);
     break;
 
   case 2:
     // 2 LEDS ON
+    digitalWrite(b1Pin, HIGH);
+    digitalWrite(b2Pin, HIGH);
+    digitalWrite(b3Pin, LOW);
     break;
   
   case 3:
     // ALL 3 LEDS ON
+    digitalWrite(b1Pin, HIGH);
+    digitalWrite(b2Pin, HIGH);
+    digitalWrite(b3Pin, HIGH);
     break;
     
   default:
@@ -104,13 +126,21 @@ void setup() {
   // Detect and connect to movement sensor module
   movement.begin();
 
-  //initialize the first reading
+  // Initialize the first reading
   movement.update();
   x=movement.getX();
   y=movement.getY();
   z=movement.getZ();
 
-  
+  // Set battery LED pins as outputs
+  pinMode(b1Pin, OUTPUT);
+  pinMode(b2Pin, OUTPUT);
+  pinMode(b3Pin, OUTPUT);
+
+  // Set 
+  pinMode(dataPin, OUTPUT);
+  pinMode(latchPin, OUTPUT);
+  pinMode(clockPin, OUTPUT);
 }
 
 void loop() {
@@ -159,7 +189,7 @@ void loop() {
   */
 
   if (closest_index != -1) {
-    Serial.println(" | Clostest point: ");
+    Serial.println(" | Closest point: ");
     Serial.println(points[closest_index].name);
   }
 
