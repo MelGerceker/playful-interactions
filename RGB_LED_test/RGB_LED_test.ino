@@ -1,69 +1,74 @@
-int redPin1 = 8;
-int greenPin1 = 10;
-int redPin2 = 9;
-int greenPin2 = 11;
-int redPin3 = 13;
-int greenPin3 = 12;
+const int dataPin = 8;   // DS
+const int latchPin = 12; // ST_CP
+const int clockPin = 13; // SH_CP
+
+uint16_t leds = 0; // 16 bits for 2 shift registers (8 LEDs × 2 outputs per LED)
 
 void setup() {
-  pinMode(redPin1, OUTPUT);
-  pinMode(greenPin1, OUTPUT);
-  pinMode(redPin2, OUTPUT);
-  pinMode(greenPin2, OUTPUT);
-  pinMode(redPin3, OUTPUT);
-  pinMode(greenPin3, OUTPUT);
+  pinMode(dataPin, OUTPUT);
+  pinMode(latchPin, OUTPUT);
+  pinMode(clockPin, OUTPUT);
+}
 
-  digitalWrite(redPin1, LOW);
-  digitalWrite(greenPin1, LOW);
-  digitalWrite(redPin2, LOW);
-  digitalWrite(greenPin2, LOW);
-  digitalWrite(redPin3, LOW);
-  digitalWrite(greenPin3, LOW);
+void sendData(uint16_t data) {
+  digitalWrite(latchPin, LOW);
+
+  // Send high byte first → second shift register
+  shiftOut(dataPin, clockPin, MSBFIRST, (data >> 8) & 0xFF);
+
+  // Then low byte → first shift register
+  shiftOut(dataPin, clockPin, MSBFIRST, data & 0xFF);
+
+  digitalWrite(latchPin, HIGH);
 }
 
 void loop() {
-  // PINGING
-  int i = 0;
-  while (i > 0) {
-    digitalWrite(redPin3, HIGH);
+
+  // Red from left to right
+  for (int i = 0; i < 8; i++) {
+    leds = 0;                  // Clear all LEDs
+    leds |= (1 << (i * 2));    // Turn on RED for LED i
+    sendData(leds);
     delay(1000);
-    digitalWrite(redPin3, LOW);
-    delay(1000);
-    i -= 1;
   }
 
-  // DISTANCE DECREASING
-  int steps = 30;
+  // All OFF
+  sendData(0);
+  delay(1000);
+
+  // Radar effect on final LED
+  uint16_t finalRed = (1 << (7 * 2)); // bit 14
+  uint16_t blink = 0;
+  int steps = 10;
   float x0 = 1000;
   float x_end = 50;  // almost zero
-  float r = pow(x_end / x0, 1.0 / steps);  // compute decay factor
+  float r = pow(x_end / x0, 1.0 / steps);
 
-  for (i = steps; i >= 0; i--) {
+  for (int i = steps; i >= 0; i--) {
     float x = x0 * pow(r, steps - i);
-    digitalWrite(redPin3, HIGH);
+    sendData(finalRed);
     delay(x);
-    digitalWrite(redPin3, LOW);
+    sendData(blink);
     delay(x);
   }
 
-  // CAUGHT
-  digitalWrite(redPin1, HIGH);
-  digitalWrite(redPin2, HIGH);
-  digitalWrite(redPin3, HIGH);
+  // All red ON
+  leds = 0;
+  for (int i = 0; i < 8; i++) {
+    leds |= (1 << (i * 2)); // red bits
+  }
+  sendData(leds);
   delay(5000);
 
-  digitalWrite(redPin1, LOW);
-  digitalWrite(redPin2, LOW);
-  digitalWrite(redPin3, LOW);
-  delay(2000);
+  // All OFF
+  sendData(0);
+  delay(5000);
 
-  // GOOD PINGING
-  i = 10;
-  while (i > 0) {
-    digitalWrite(greenPin2, HIGH);
+  // Green from left to right
+  for (int i = 0; i < 8; i++) {
+    leds = 0;
+    leds |= (1 << (i * 2 + 1)); // green bits
+    sendData(leds);
     delay(1000);
-    digitalWrite(greenPin2, LOW);
-    delay(1000);
-    i -= 1;
   }
 }
