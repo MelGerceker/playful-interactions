@@ -5,7 +5,7 @@ ModulinoMovement movement;
 
 float x, y, z;
 float roll, pitch, yaw;
-const float a = 0.2; //smoothing factor
+const float a = 0.2; //smoothing factor COULD BE TWEAKED?
 bool Target_is_Hit = false;
 float current_dot_product;
 
@@ -119,9 +119,12 @@ void loop() {
 
   //CHANGED STUFF
   //smoothed values
-  x = a*(x + cos(movement.getPitch()*cos(movement.getYaw())) + (1-a)*x;
-  y = a*(x + cos(movement.getPitch()*sin(movement.getYaw())) + (1-a)*y;
+  x = a*(x + cos(movement.getPitch()*cos(movement.getYaw())) + (1-a)*x);
+  y = a*(x + cos(movement.getPitch()*sin(movement.getYaw())) + (1-a)*y);
   z = a*(x + sin(movement.getPitch())) + (1-a)*z;
+  // not sure if this logic is correct
+  // reuses x y z
+  //degree vs pitch/yaw double check?
 
   // Temporary current vector
   Vec3 current = {x, y, z};
@@ -161,7 +164,7 @@ void loop() {
 
   if (closest_index != -1) {
     Serial.println(" | Clostest point: ");
-    Serial.println(points[closest_index].name);
+    Serial.print(points[closest_index].name);
   }
 
     if(is_hit) {

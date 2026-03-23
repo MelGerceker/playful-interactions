@@ -10,12 +10,11 @@ const int clockPin = 13; // SH_CP
 
 uint16_t radar = 0; // 16 bits for 2 shift registers (8 LEDs × 2 outputs per LED)
 
-// Create a ModulinoMovement
 ModulinoMovement movement;
 
 float x, y, z;
 float roll, pitch, yaw;
-const float a = 0.2; //smoothing factor
+const float a = 0.2;
 bool Target_is_Hit = false;
 float current_dot_product;
 
@@ -114,6 +113,7 @@ bool Hit_Calculator() {
     battery_life--;
     Update_Battery_Life();
     // test that this doesnt cause the battery life to decrease by more than 1 per hit bc of the loop?
+    //if so just check that a bool switches
   }
 
   return Target_is_Hit;
@@ -158,15 +158,6 @@ void loop() {
   int closest_index = Closest_Target_Finder(current);
   bool is_hit = Hit_Calculator(); //already calls Update_Battery_Life() if hit is true
 
-/*
-  // Get acceleration and gyroscope values
-  x = movement.getX();
-  y = movement.getY();
-  z = movement.getZ();
-  roll = movement.getRoll();
-  pitch = movement.getPitch();
-  yaw = movement.getYaw();
-  */
 
   // Print acceleration values
   Serial.print("A: ");
@@ -176,17 +167,6 @@ void loop() {
   Serial.print(", ");
   Serial.print(z, 3);
   
-  // Print divider between acceleration and gyroscope
-  Serial.print(" | G: ");
-  
-  /*
-  // Print gyroscope values
-  Serial.print(roll, 1);
-  Serial.print(", ");
-  Serial.print(pitch, 1);
-  Serial.print(", ");
-  Serial.println(yaw, 1);
-  */
 
   if (closest_index != -1) {
     Serial.println(" | Closest point: ");
