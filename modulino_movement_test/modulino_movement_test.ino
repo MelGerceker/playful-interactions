@@ -146,11 +146,12 @@ void setup() {
 void loop() {
   // Read new movement data from the sensor
   movement.update();
-
+  Vec3 NewVec = {movement.getX(), movement.getY(), movement.getZ()}
   //smoothed values
+  if (DotProduct(current, NewVec) > 0.05){
   x = a*movement.getX() + (1-a)*x;
   y = a*movement.getY() + (1-a)*y;
-  z = a*movement.getZ() + (1-a)*z;
+  z = a*movement.getZ() + (1-a)*z;}
 
   //alternative smoothed values
 //  x = a*(x + cos(movement.getPitch()*cos(movement.getYaw())) + (1-a)*x);
@@ -162,6 +163,8 @@ void loop() {
 
   // Temporary current vector
   Vec3 current = {x, y, z};
+//  Vec3 current = current.Normalize();
+// normalization (do we also have to normalize somewhere else?)
 
   int closest_index = Closest_Target_Finder(current);
   bool is_hit = Hit_Calculator(); //already calls Update_Battery_Life() if hit is true
