@@ -152,6 +152,14 @@ void loop() {
   y = a*movement.getY() + (1-a)*y;
   z = a*movement.getZ() + (1-a)*z;
 
+  //alternative smoothed values
+//  x = a*(x + cos(movement.getPitch()*cos(movement.getYaw())) + (1-a)*x);
+//  y = a*(x + cos(movement.getPitch()*sin(movement.getYaw())) + (1-a)*y);
+//  z = a*(x + sin(movement.getPitch())) + (1-a)*z;
+  // not sure if this logic is correct
+  // reuses x y z
+  //degree vs pitch/yaw double check?
+
   // Temporary current vector
   Vec3 current = {x, y, z};
 
