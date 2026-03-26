@@ -15,10 +15,11 @@ ModulinoMovement movement;
 float x, y, z;
 float roll, pitch, yaw;
 const float a = 0.2;
-bool Target_is_Hit = false;
 float current_dot_product;
 
+bool Target_is_Hit = false;
 int battery_life = 1; //0: empty, 1: 1/3, 2: 2/3, 3: full
+//bool prevHit = false;
 
 struct Vec3 {
   float x;
@@ -31,9 +32,14 @@ struct TargetPoint {
   Vec3 dir;
 };
 
+Vec3 current;
+
+// H=HIT, R=RECHARGE
 TargetPoint points[] = {
-  {"P1", {0.0, 0.0, 1.0}},
-  {"P2", {1.0, 0.0, 0.0}}
+  {"H1", {0.0, 0.0, 1.0}},
+  {"R2", {1.0, 0.0, 0.0}},
+  {"H3", {0.0, 0.0, 0.7}}
+
 };
 
 float DotProduct(Vec3 a, Vec3 b) {
@@ -101,29 +107,52 @@ void Update_Battery_Life() {
 
 }
 
-bool Hit_Calculator() {
+
+//today:
+//hit vs. recharge point
+
+//how should hit affect battery
+//2 seconds
+
+//how should recharge affect battery
+//3 seconds
+
+//LED light guidance
+//point to closest point for now
+//assume cross shape?
+
+
+bool Hit_Calculator(int closest_index) {
   // the dot product being near equal to 1 means we are pointing at the point
-  // so this method could be used to say if more than 0.95 point is hit
 
   Target_is_Hit = (current_dot_product > 0.95);
 
-  // implement check for damage vs recharge point here
-  // for now we assume all points are damage points
+  if(Target_is_Hit){
+  delay(2000);
+  }
+
+  // check for damage vs recharge point here
   if (Target_is_Hit && battery_life > 0) {
-    battery_life--;
-    Update_Battery_Life();
+
+    if(points[closest_index].name[0]=='H'){
+      battery_life--;
+
+    }else if(points[closest_index].name[0]=='R'){
+      battery_life++;
+    }
+
     // test that this doesnt cause the battery life to decrease by more than 1 per hit bc of the loop?
     //if so just check that a bool switches
   }
+
+  Update_Battery_Life();
 
   return Target_is_Hit;
 }
 
 void setup() {
   Serial.begin(9600);
-  // Initialize Modulino I2C communication
   Modulino.begin();
-  // Detect and connect to movement sensor module
   movement.begin();
 
   // Initialize the first reading
@@ -131,6 +160,8 @@ void setup() {
   x=movement.getX();
   y=movement.getY();
   z=movement.getZ();
+
+  current = {x, y, z};
 
   // Set battery LED pins as outputs
   pinMode(b1Pin, OUTPUT);
@@ -146,28 +177,17 @@ void setup() {
 void loop() {
   // Read new movement data from the sensor
   movement.update();
-  Vec3 NewVec = {movement.getX(), movement.getY(), movement.getZ()}
+  Vec3 NewVec = {movement.getX(), movement.getY(), movement.getZ()};
   //smoothed values
-  if (DotProduct(current, NewVec) > 0.05){
+  if (DotProduct(current, NewVec) < 0.95){
   x = a*movement.getX() + (1-a)*x;
   y = a*movement.getY() + (1-a)*y;
   z = a*movement.getZ() + (1-a)*z;}
+  current=NewVec;
 
-  //alternative smoothed values
-//  x = a*(x + cos(movement.getPitch()*cos(movement.getYaw())) + (1-a)*x);
-//  y = a*(x + cos(movement.getPitch()*sin(movement.getYaw())) + (1-a)*y);
-//  z = a*(x + sin(movement.getPitch())) + (1-a)*z;
-  // not sure if this logic is correct
-  // reuses x y z
-  //degree vs pitch/yaw double check?
-
-  // Temporary current vector
-  Vec3 current = {x, y, z};
-//  Vec3 current = current.Normalize();
-// normalization (do we also have to normalize somewhere else?)
 
   int closest_index = Closest_Target_Finder(current);
-  bool is_hit = Hit_Calculator(); //already calls Update_Battery_Life() if hit is true
+  bool is_hit = Hit_Calculator(closest_index); //already calls Update_Battery_Life() if hit is true
 
 
   // Print acceleration values
@@ -181,14 +201,13 @@ void loop() {
 
   if (closest_index != -1) {
     Serial.println(" | Closest point: ");
-    Serial.println(points[closest_index].name);
+    Serial.print(points[closest_index].name);
   }
 
-    if(is_hit) {
+  if(is_hit) {
     Serial.println(" | Target Hit!");
   }
 
-  
   delay(200);
 }
 
