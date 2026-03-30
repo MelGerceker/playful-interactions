@@ -1,27 +1,27 @@
-// NOT UPDATED CODE AND DOES NOT HAVE Z-AXIS
-
 #include "Modulino.h"
+
+ModulinoMovement movement;
 
 const int b1Pin = 2; // Battery LED 1
 const int b2Pin = 3; // Battery LED 2
 const int b3Pin = 4; // Battery LED 3
 
+const int v1Pin = 5; // Vmotor 1
+const int v2Pin = 6; // Vmotor 2
+
 const int dataPin = 8;   // DS
 const int latchPin = 12; // ST_CP
 const int clockPin = 13; // SH_CP
 
-//LED COMPASS ASSIGN PROPERLY
-const int ledUpPin = 5;
-const int ledRightPin =6;
-const int ledDownPin =7;
-const int ledLeftPin =9;
-const int ledCenterPin =10;
-
 uint16_t radar = 0; // 16 bits for 2 shift registers (8 LEDs × 2 outputs per LED)
 
-ModulinoMovement movement;
+#define SET_RADAR(led)   (radar |= (1 << led)) // Turn on specific radar LED
+#define CLEAR_RADAR(led) (radar &= ~(1 << led)) // Turn off specific radar LED
+#define TURN_ALL_RED() (radar = 0x5555)  // Turn all radar LEDs red
+#define TURN_ALL_GREEN() (radar = 0xAAAA)  // Turn all radar LEDs green
+#define TURN_OFF_RADAR() (radar = 0) // Turn off radar
 
-float x, y, z;
+float x, y;
 const float a = 0.2;
 float current_dot_product;
 
@@ -34,7 +34,6 @@ bool timingHit = false;
 struct Vec3 {
   float x;
   float y;
-  float z;
 };
 
 struct TargetPoint {
@@ -46,24 +45,24 @@ Vec3 current;
 
 // H=HIT, R=RECHARGE
 TargetPoint points[] = {
-  {"H1", {0.0, 1.0, 0.0}},
-  {"R2", {1.0, 0.0, 0.0}},
-  {"H3", {0.0, -1.0, 0.0}}
+  {"H1", {0.0, 1.0}},
+  {"R2", {1.0, 0.0}},
+  {"H3", {0.0, -1.0}}
 
 };
 
 float DotProduct(Vec3 a, Vec3 b) {
-  return a.x * b.x + a.y * b.y + a.z * b.z;
+  return a.x * b.x + a.y * b.y;
 }
 
 Vec3 Normalize(Vec3 v){
-  float magnitude = sqrt(v.x *v.x + v.y*v.y + v.z*v.z);
+  float magnitude = sqrt(v.x *v.x + v.y*v.y);
 
   if (magnitude < 0.0001){
     return v; //avoid division by zero
   }
 
-  Vec3 normalized = {v.x/magnitude, v.y/magnitude, v.z/magnitude};
+  Vec3 normalized = {v.x/magnitude, v.y/magnitude};
   return normalized;
 }
 
@@ -89,9 +88,21 @@ int Closest_Target_Finder(Vec3 current) {
   return closest_index;
 }
 
+// Sending radar data to microcontrollers
+void sendData(uint16_t data) {
+  digitalWrite(latchPin, LOW);
+
+  // Send high byte first → second shift register
+  shiftOut(dataPin, clockPin, MSBFIRST, (data >> 8) & 0xFF);
+
+  // Then low byte → first shift register
+  shiftOut(dataPin, clockPin, MSBFIRST, data & 0xFF);
+
+  digitalWrite(latchPin, HIGH);
+}
+
+
 void Update_Battery_Life() {
-  // for now the target points are all identified as damage points
-  //later on battery should behave differently if the target point is a recharge point
 
   switch (battery_life)
   {
@@ -130,15 +141,6 @@ void Update_Battery_Life() {
 
 }
 
-void ClearCompassLEDs(){
-  digitalWrite(ledUpPin, LOW);
-  digitalWrite(ledRightPin, LOW);
-  digitalWrite(ledDownPin, LOW);
-  digitalWrite(ledLeftPin, LOW);
-  digitalWrite(ledCenterPin, LOW);
-}
-
-
 bool Hit_Calculator(int closest_index) {
   // the dot product being near equal to 1 means we are pointing at the point
 
@@ -154,6 +156,7 @@ bool Hit_Calculator(int closest_index) {
   if (!Target_is_Hit) {
     timingHit = false;
     prevHit = false;
+    TURN_OFF_RADAR();
     return false;
   }
 
@@ -164,8 +167,10 @@ bool Hit_Calculator(int closest_index) {
 
   if (points[closest_index].name[0] == 'H') {
     requiredTime = 2000; // 2 seconds for hit
+    TURN_ALL_RED();
   } else if (points[closest_index].name[0] == 'R') {
     requiredTime = 3000; // 3 seconds for recharge
+    TURN_ALL_GREEN();
   }
 
   Serial.print("Hold time: ");
@@ -184,14 +189,12 @@ bool Hit_Calculator(int closest_index) {
 
     Update_Battery_Life();
     prevHit=true;
-
   }
 
   return Target_is_Hit;
 }
 
 void UpdateCompass(int closest_index){
-  ClearCompassLEDs();
 
   if(closest_index== -1){
     return;
@@ -202,35 +205,27 @@ void UpdateCompass(int closest_index){
 
   float currX = cur.x;
   float currY = cur.y;
-  //float currZ = cur.z;
   float tarX = target.x;
   float tarY = target.y;
-  //float tarZ = target.z;
 
-  //z not used since compass is 2d
 
   float dot=DotProduct(cur,target); //can be set as param if needed
   float cross=currX*tarY - currY*tarX;
 
-  if(dot>0.95){
-    digitalWrite(ledCenterPin, HIGH);
-    return;
-  }
-
   if(fabs(cross)>fabs(dot)){
     if (cross > 0) {
-      digitalWrite(ledLeftPin, HIGH);
+      //digitalWrite(ledLeftPin, HIGH);
       Serial.println("LEFT");
     } else {
-      digitalWrite(ledRightPin, HIGH);
+      //digitalWrite(ledRightPin, HIGH);
       Serial.println("RIGHT");
     }
   } else {
     if (dot > 0) {
-      digitalWrite(ledUpPin, HIGH);
+      //digitalWrite(ledUpPin, HIGH);
       Serial.println("UP");
     } else {
-      digitalWrite(ledDownPin, HIGH);
+      //digitalWrite(ledDownPin, HIGH);
       Serial.println("DOWN");
     }
   }
@@ -246,54 +241,58 @@ void setup() {
   movement.update();
   x=movement.getX();
   y=movement.getY();
-  z=movement.getZ();
+ // z=movement.getZ();
 
-  current = Normalize({x, y, z});
+  current = Normalize({x, y});
 
   // Set battery LED pins as outputs
   pinMode(b1Pin, OUTPUT);
   pinMode(b2Pin, OUTPUT);
   pinMode(b3Pin, OUTPUT);
 
-  // Set 
+  // Set Vmotor pins as outputs
+  pinMode(v1Pin, OUTPUT);
+  pinMode(v2Pin, OUTPUT);
+
+  // Set radar pins as outputs
   pinMode(dataPin, OUTPUT);
   pinMode(latchPin, OUTPUT);
   pinMode(clockPin, OUTPUT);
 
-  //LED COMPASS CODE?
-  pinMode(ledUpPin, OUTPUT);
-  pinMode(ledRightPin, OUTPUT);
-  pinMode(ledDownPin, OUTPUT);
-  pinMode(ledLeftPin, OUTPUT);
-  pinMode(ledCenterPin, OUTPUT);
-
   Update_Battery_Life();
-  ClearCompassLEDs();
+  TURN_OFF_RADAR();
 }
 
 void loop() {
   // Read new movement data from the sensor
   movement.update();
 
-  Vec3 newVec = {movement.getX(), movement.getY(), movement.getZ()};
+  Vec3 newVec = {movement.getX(), movement.getY()};
   newVec = Normalize(newVec);
 
   //smoothed values
   x = a * newVec.x + (1 - a) * x;
   y = a * newVec.y + (1 - a) * y;
-  z = a * newVec.z + (1 - a) * z;
-  current = Normalize({x, y, z});
+  //z = a * newVec.z + (1 - a) * z;
+  current = Normalize({x, y});
 
   int closest_index = Closest_Target_Finder(current);
   bool is_hit = Hit_Calculator(closest_index);
   UpdateCompass(closest_index);
 
+  sendData(radar);
+
   Serial.print(" | current: ");
   Serial.print(current.x, 3);
   Serial.print(", ");
   Serial.print(current.y, 3);
-  Serial.print(", ");
-  Serial.print(current.z, 3);
+  //Serial.print(", ");
+  //Serial.print(current.z, 3);
+
+Serial.print(" | Battery life: ");
+  Serial.print(battery_life);
+  Serial.print(" | Radar: ");
+  Serial.print(radar);
   
   if (closest_index != -1) {
     Serial.print(" | Closest point: ");
@@ -302,9 +301,26 @@ void loop() {
 
   if(is_hit) {
     Serial.print(" | Target Hit!");
+    digitalWrite(v1Pin, HIGH);
+    digitalWrite(v2Pin, HIGH);
+  } else {
+    digitalWrite(v1Pin, LOW);
+    digitalWrite(v2Pin, LOW);
   }
 
   Serial.println();
+
+    if (battery_life == 0) {
+
+        digitalWrite(v1Pin, LOW);
+        digitalWrite(v2Pin, LOW);
+        TURN_ALL_RED();
+        sendData(radar);
+        delay(10000);
+        TURN_ALL_GREEN();
+        sendData(radar);
+        delay(10000);
+  }
 
   delay(200);
 }
