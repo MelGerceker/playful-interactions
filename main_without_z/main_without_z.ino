@@ -289,7 +289,7 @@ void loop() {
   //Serial.print(", ");
   //Serial.print(current.z, 3);
 
-Serial.print(" | Battery life: ");
+  Serial.print(" | Battery life: ");
   Serial.print(battery_life);
   Serial.print(" | Radar: ");
   Serial.print(radar);
