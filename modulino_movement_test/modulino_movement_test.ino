@@ -15,19 +15,19 @@ const int ledDownPin =7;
 const int ledLeftPin =9;
 const int ledCenterPin =10;
 
-
 uint16_t radar = 0; // 16 bits for 2 shift registers (8 LEDs × 2 outputs per LED)
 
 ModulinoMovement movement;
 
 float x, y;
-//float roll, pitch, yaw;
 const float a = 0.2;
 float current_dot_product;
 
 bool Target_is_Hit = false;
 int battery_life = 1; //0: empty, 1: 1/3, 2: 2/3, 3: full
-//bool prevHit = false;
+bool prevHit = false;
+unsigned long hitStartTime = 0;
+bool timingHit = false;
 
 struct Vec3 {
   float x;
@@ -45,12 +45,23 @@ Vec3 current;
 TargetPoint points[] = {
   {"H1", {0.0, 1.0}},
   {"R2", {1.0, 0.0}},
-  {"H3", {0.6, 0.0}}
+  {"H3", {0.0, -1.0}}
 
 };
 
 float DotProduct(Vec3 a, Vec3 b) {
   return a.x * b.x + a.y * b.y;
+}
+
+Vec3 Normalize(Vec3 v){
+  float magnitude = sqrt(v.x *v.x + v.y*v.y);
+
+  if (magnitude < 0.0001){
+    return v; //avoid division by zero
+  }
+
+  Vec3 normalized = {v.x/magnitude, v.y/magnitude};
+  return normalized;
 }
 
 int Closest_Target_Finder(Vec3 current) {
@@ -61,7 +72,9 @@ int Closest_Target_Finder(Vec3 current) {
   int pointCount = sizeof(points) / sizeof(points[0]);
 
   for (int i =0; i<pointCount;i++) {
-    float result = DotProduct(current, points[i].dir);
+    //float result = DotProduct(current, points[i].dir);
+    Vec3 target = Normalize(points[i].dir);
+    float result = DotProduct(current, target);
 
     if (closest_distance < result) {
       closest_distance = result;
@@ -122,28 +135,42 @@ void ClearCompassLEDs(){
   digitalWrite(ledCenterPin, LOW);
 }
 
-Vec3 Normalize(Vec3 v){
-  float magnitude = sqrt(v.x *v.x + v.y*v.y);
-
-  if (magnitude < 0.0001){
-    return v; //avoid division by zero
-  }
-
-  Vec3 normalized = {v.x/magnitude, v.y/magnitude};
-  return normalized;
-}
 
 bool Hit_Calculator(int closest_index) {
   // the dot product being near equal to 1 means we are pointing at the point
 
-  Target_is_Hit = (current_dot_product > 0.95);
+  Target_is_Hit = (current_dot_product > 0.97);
 
-  if(Target_is_Hit){
-  delay(2000);
+  //just started hitting
+  if (Target_is_Hit && !timingHit) {
+    hitStartTime = millis();
+    timingHit = true;
   }
 
-  // check for damage vs recharge point here
-  if (Target_is_Hit ) {
+  //stopped hitting so reset timer
+  if (!Target_is_Hit) {
+    timingHit = false;
+    prevHit = false;
+    return false;
+  }
+
+  // Check how long we've been holding target
+  unsigned long elapsed = millis() - hitStartTime;
+
+  int requiredTime = 0;
+
+  if (points[closest_index].name[0] == 'H') {
+    requiredTime = 2000; // 2 seconds for hit
+  } else if (points[closest_index].name[0] == 'R') {
+    requiredTime = 3000; // 3 seconds for recharge
+  }
+
+  Serial.print("Hold time: ");
+  Serial.print(elapsed);
+  Serial.println(" ms");
+
+  //trigger when held for long enough
+  if (elapsed>=requiredTime && !prevHit) {
 
     if(points[closest_index].name[0]=='H' && battery_life > 0){
       battery_life--;
@@ -152,11 +179,10 @@ bool Hit_Calculator(int closest_index) {
       battery_life++;
     }
 
-    // test that this doesnt cause the battery life to decrease by more than 1 per hit bc of the loop?
-    //if so just check that a bool switches
-  }
+    Update_Battery_Life();
+    prevHit=true;
 
-  Update_Battery_Life();
+  }
 
   return Target_is_Hit;
 }
@@ -187,14 +213,18 @@ void UpdateCompass(int closest_index){
   if(fabs(cross)>fabs(dot)){
     if (cross > 0) {
       digitalWrite(ledLeftPin, HIGH);
+      Serial.println("LEFT");
     } else {
       digitalWrite(ledRightPin, HIGH);
+      Serial.println("RIGHT");
     }
   } else {
     if (dot > 0) {
       digitalWrite(ledUpPin, HIGH);
+      Serial.println("UP");
     } else {
       digitalWrite(ledDownPin, HIGH);
+      Serial.println("DOWN");
     }
   }
 
@@ -210,7 +240,7 @@ void setup() {
   x=movement.getX();
   y=movement.getY();
 
-  current = {x, y};
+  current = Normalize({x, y});
 
   // Set battery LED pins as outputs
   pinMode(b1Pin, OUTPUT);
@@ -229,6 +259,7 @@ void setup() {
   pinMode(ledLeftPin, OUTPUT);
   pinMode(ledCenterPin, OUTPUT);
 
+  Update_Battery_Life();
   ClearCompassLEDs();
 }
 
@@ -240,31 +271,29 @@ void loop() {
   newVec = Normalize(newVec);
 
   //smoothed values
-  if (DotProduct(current, newVec) < 0.95){
-    x = a*newVec.x + (1-a)*x;
-    y = a*newVec.y + (1-a)*y;
-    current=Normalize({x,y});
-  }
+  x = a * newVec.x + (1 - a) * x;
+  y = a * newVec.y + (1 - a) * y;
+  current = Normalize({x, y});
 
   int closest_index = Closest_Target_Finder(current);
-  bool is_hit = Hit_Calculator(closest_index); //already calls Update_Battery_Life() if hit is true
+  bool is_hit = Hit_Calculator(closest_index);
   UpdateCompass(closest_index);
 
-  // Print acceleration values
-  Serial.print("A: ");
-  Serial.print(x, 3);
+  Serial.print(" | current: ");
+  Serial.print(current.x, 3);
   Serial.print(", ");
-  Serial.print(y, 3);
+  Serial.print(current.y, 3);
   
-
   if (closest_index != -1) {
     Serial.print(" | Closest point: ");
     Serial.print(points[closest_index].name);
   }
 
   if(is_hit) {
-    Serial.println(" | Target Hit!");
+    Serial.print(" | Target Hit!");
   }
+
+  Serial.println();
 
   delay(200);
 }
