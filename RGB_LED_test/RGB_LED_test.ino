@@ -1,3 +1,10 @@
+#include <Servo.h>
+
+Servo myservo;  // create servo object to control a servo
+// twelve servo objects can be created on most boards
+
+int pos = 0;    // variable to store the servo position
+
 const int dataPin = 8;   // DS
 const int latchPin = 12; // ST_CP
 const int clockPin = 13; // SH_CP
@@ -8,6 +15,8 @@ void setup() {
   pinMode(dataPin, OUTPUT);
   pinMode(latchPin, OUTPUT);
   pinMode(clockPin, OUTPUT);
+
+  myservo.attach(10);  // attaches the servo on pin 9 to the servo object
 }
 
 void sendData(uint16_t data) {
@@ -23,6 +32,7 @@ void sendData(uint16_t data) {
 }
 
 void loop() {
+  myservo.write(90);
 
   // Red from left to right
   for (int i = 0; i < 8; i++) {
@@ -34,6 +44,7 @@ void loop() {
 
   // All OFF
   sendData(0);
+  myservo.write(180);
   delay(1000);
 
   // Radar effect on final LED
@@ -58,10 +69,12 @@ void loop() {
     leds |= (1 << (i * 2)); // red bits
   }
   sendData(leds);
+  myservo.write(90);
   delay(5000);
 
   // All OFF
   sendData(0);
+  myservo.write(0);
   delay(5000);
 
   // Green from left to right
