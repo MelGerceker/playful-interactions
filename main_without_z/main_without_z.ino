@@ -1,5 +1,3 @@
-// DOES HAVE Z-AXIS
-
 #include "Modulino.h"
 
 ModulinoMovement movement;
@@ -15,16 +13,15 @@ const int dataPin = 8;   // DS
 const int latchPin = 12; // ST_CP
 const int clockPin = 13; // SH_CP
 
+uint16_t radar = 0; // 16 bits for 2 shift registers (8 LEDs × 2 outputs per LED)
+
 #define SET_RADAR(led)   (radar |= (1 << led)) // Turn on specific radar LED
 #define CLEAR_RADAR(led) (radar &= ~(1 << led)) // Turn off specific radar LED
 #define TURN_ALL_RED() (radar = 0x5555)  // Turn all radar LEDs red
 #define TURN_ALL_GREEN() (radar = 0xAAAA)  // Turn all radar LEDs green
 #define TURN_OFF_RADAR() (radar = 0) // Turn off radar
 
-uint16_t radar = 0; // 16 bits for 2 shift registers (8 LEDs × 2 outputs per LED)
-
-
-float x, y, z;
+float x, y;
 const float a = 0.2;
 float current_dot_product;
 
@@ -37,7 +34,6 @@ bool timingHit = false;
 struct Vec3 {
   float x;
   float y;
-  float z;
 };
 
 struct TargetPoint {
@@ -49,24 +45,24 @@ Vec3 current;
 
 // H=HIT, R=RECHARGE
 TargetPoint points[] = {
-  {"H1", {0.0, 1.0, 0.0}},
-  {"R2", {1.0, 0.0, 0.0}},
-  {"H3", {0.0, -1.0, 0.0}}
+  {"H1", {0.0, 1.0}},
+  {"R2", {1.0, 0.0}},
+  {"H3", {0.0, -1.0}}
 
 };
 
 float DotProduct(Vec3 a, Vec3 b) {
-  return a.x * b.x + a.y * b.y + a.z * b.z;
+  return a.x * b.x + a.y * b.y;
 }
 
 Vec3 Normalize(Vec3 v){
-  float magnitude = sqrt(v.x *v.x + v.y*v.y + v.z*v.z);
+  float magnitude = sqrt(v.x *v.x + v.y*v.y);
 
   if (magnitude < 0.0001){
     return v; //avoid division by zero
   }
 
-  Vec3 normalized = {v.x/magnitude, v.y/magnitude, v.z/magnitude};
+  Vec3 normalized = {v.x/magnitude, v.y/magnitude};
   return normalized;
 }
 
@@ -105,9 +101,8 @@ void sendData(uint16_t data) {
   digitalWrite(latchPin, HIGH);
 }
 
+
 void Update_Battery_Life() {
-  // for now the target points are all identified as damage points
-  //later on battery should behave differently if the target point is a recharge point
 
   switch (battery_life)
   {
@@ -210,16 +205,12 @@ void UpdateCompass(int closest_index){
 
   float currX = cur.x;
   float currY = cur.y;
-  //float currZ = cur.z;
   float tarX = target.x;
   float tarY = target.y;
-  //float tarZ = target.z;
 
-  //z not used since compass is 2d
 
   float dot=DotProduct(cur,target); //can be set as param if needed
   float cross=currX*tarY - currY*tarX;
-
 
   if(fabs(cross)>fabs(dot)){
     if (cross > 0) {
@@ -250,9 +241,9 @@ void setup() {
   movement.update();
   x=movement.getX();
   y=movement.getY();
-  z=movement.getZ();
+ // z=movement.getZ();
 
-  current = Normalize({x, y, z});
+  current = Normalize({x, y});
 
   // Set battery LED pins as outputs
   pinMode(b1Pin, OUTPUT);
@@ -276,14 +267,14 @@ void loop() {
   // Read new movement data from the sensor
   movement.update();
 
-  Vec3 newVec = {movement.getX(), movement.getY(), movement.getZ()};
+  Vec3 newVec = {movement.getX(), movement.getY()};
   newVec = Normalize(newVec);
 
   //smoothed values
   x = a * newVec.x + (1 - a) * x;
   y = a * newVec.y + (1 - a) * y;
-  z = a * newVec.z + (1 - a) * z;
-  current = Normalize({x, y, z});
+  //z = a * newVec.z + (1 - a) * z;
+  current = Normalize({x, y});
 
   int closest_index = Closest_Target_Finder(current);
   bool is_hit = Hit_Calculator(closest_index);
@@ -295,8 +286,8 @@ void loop() {
   Serial.print(current.x, 3);
   Serial.print(", ");
   Serial.print(current.y, 3);
-  Serial.print(", ");
-  Serial.print(current.z, 3);
+  //Serial.print(", ");
+  //Serial.print(current.z, 3);
 
   Serial.print(" | Battery life: ");
   Serial.print(battery_life);
@@ -319,7 +310,7 @@ void loop() {
 
   Serial.println();
 
-      if (battery_life == 0) {
+    if (battery_life == 0) {
 
         digitalWrite(v1Pin, LOW);
         digitalWrite(v2Pin, LOW);
