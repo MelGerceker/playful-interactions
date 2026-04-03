@@ -1,6 +1,8 @@
 #include "Modulino.h"
+#include "Servo.h"
 
 ModulinoMovement movement;
+Servo myservo;
 
 const int b1Pin = 2; // Battery LED 1
 const int b2Pin = 3; // Battery LED 2
@@ -21,15 +23,25 @@ uint16_t radar = 0; // 16 bits for 2 shift registers (8 LEDs × 2 outputs per LE
 #define TURN_ALL_GREEN() (radar = 0xAAAA)  // Turn all radar LEDs green
 #define TURN_OFF_RADAR() (radar = 0) // Turn off radar
 
+int servoPos = 90; // init servo position
+
 float x, y;
 const float a = 0.2;
 float current_dot_product;
 
 bool Target_is_Hit = false;
-int battery_life = 1; //0: empty, 1: 1/3, 2: 2/3, 3: full
+int battery_life = 2; // init 1 led on 1 led flickering
 bool prevHit = false;
+bool Win_State=false;
+
+bool flickering = false;
+
 unsigned long hitStartTime = 0;
 bool timingHit = false;
+
+unsigned long lastFlickerTime = 0;
+bool flickerState = false;
+const int flickerInterval = 500;
 
 struct Vec3 {
   float x;
@@ -74,7 +86,6 @@ int Closest_Target_Finder(Vec3 current) {
   int pointCount = sizeof(points) / sizeof(points[0]);
 
   for (int i =0; i<pointCount;i++) {
-    //float result = DotProduct(current, points[i].dir);
     Vec3 target = Normalize(points[i].dir);
     float result = DotProduct(current, target);
 
@@ -101,6 +112,14 @@ void sendData(uint16_t data) {
   digitalWrite(latchPin, HIGH);
 }
 
+void Update_Flicker() {
+  unsigned long currentTime = millis();
+
+  if(currentTime-lastFlickerTime>=flickerInterval){
+    flickerState = !flickerState; 
+    lastFlickerTime = currentTime;
+  }
+}
 
 void Update_Battery_Life() {
 
@@ -112,26 +131,50 @@ void Update_Battery_Life() {
     digitalWrite(b2Pin, LOW);
     digitalWrite(b3Pin, LOW);
     break;
-
+  
   case 1:
+    //1 LED FLICKERING
+    digitalWrite(b2Pin, LOW);
+    digitalWrite(b3Pin, LOW);
+    digitalWrite(b1Pin, flickerState); //FLICKER HERE
+    break;
+
+  case 2:
     // 1 LED ON
     digitalWrite(b1Pin, HIGH);
     digitalWrite(b2Pin, LOW);
     digitalWrite(b3Pin, LOW);
     break;
+  
+  case 3:
+    // 1 LED ON 1 FLICKERING
+    digitalWrite(b1Pin, HIGH);
+    digitalWrite(b3Pin, LOW);
 
-  case 2:
+    digitalWrite(b2Pin, flickerState); //FLICKER HERE
+    break;
+
+  case 4:
     // 2 LEDS ON
     digitalWrite(b1Pin, HIGH);
     digitalWrite(b2Pin, HIGH);
     digitalWrite(b3Pin, LOW);
     break;
   
-  case 3:
+  case 5:
+    // 2 LEDS ON 1 FLICKERING
+    digitalWrite(b1Pin, HIGH);
+    digitalWrite(b2Pin, HIGH);
+
+    digitalWrite(b3Pin, flickerState); //FLICKER HERE
+    break;
+  
+  case 6:
     // ALL 3 LEDS ON
     digitalWrite(b1Pin, HIGH);
     digitalWrite(b2Pin, HIGH);
     digitalWrite(b3Pin, HIGH);
+    Win_State=true;
     break;
     
   default:
@@ -168,9 +211,12 @@ bool Hit_Calculator(int closest_index) {
   if (points[closest_index].name[0] == 'H') {
     requiredTime = 2000; // 2 seconds for hit
     TURN_ALL_RED();
+    //ADD SERVO CODE HERE
+
   } else if (points[closest_index].name[0] == 'R') {
     requiredTime = 3000; // 3 seconds for recharge
     TURN_ALL_GREEN();
+    //ADD SERVO CODE HERE
   }
 
   Serial.print("Hold time: ");
@@ -183,11 +229,10 @@ bool Hit_Calculator(int closest_index) {
     if(points[closest_index].name[0]=='H' && battery_life > 0){
       battery_life--;
 
-    }else if(points[closest_index].name[0]=='R' && battery_life<3){
+    }else if(points[closest_index].name[0]=='R' && battery_life<6){
       battery_life++;
     }
 
-    Update_Battery_Life();
     prevHit=true;
   }
 
@@ -214,18 +259,14 @@ void UpdateCompass(int closest_index){
 
   if(fabs(cross)>fabs(dot)){
     if (cross > 0) {
-      //digitalWrite(ledLeftPin, HIGH);
       Serial.println("LEFT");
     } else {
-      //digitalWrite(ledRightPin, HIGH);
       Serial.println("RIGHT");
     }
   } else {
     if (dot > 0) {
-      //digitalWrite(ledUpPin, HIGH);
       Serial.println("UP");
     } else {
-      //digitalWrite(ledDownPin, HIGH);
       Serial.println("DOWN");
     }
   }
@@ -241,7 +282,6 @@ void setup() {
   movement.update();
   x=movement.getX();
   y=movement.getY();
- // z=movement.getZ();
 
   current = Normalize({x, y});
 
@@ -259,12 +299,15 @@ void setup() {
   pinMode(latchPin, OUTPUT);
   pinMode(clockPin, OUTPUT);
 
+  myservo.attach(9); // Attach servo to pin 9
+  myservo.write(servoPos); // Set initial servo position
+
   Update_Battery_Life();
   TURN_OFF_RADAR();
+
 }
 
 void loop() {
-  // Read new movement data from the sensor
   movement.update();
 
   Vec3 newVec = {movement.getX(), movement.getY()};
@@ -273,54 +316,59 @@ void loop() {
   //smoothed values
   x = a * newVec.x + (1 - a) * x;
   y = a * newVec.y + (1 - a) * y;
-  //z = a * newVec.z + (1 - a) * z;
   current = Normalize({x, y});
 
-  int closest_index = Closest_Target_Finder(current);
-  bool is_hit = Hit_Calculator(closest_index);
-  UpdateCompass(closest_index);
+  if(!Win_State){
+    int closest_index = Closest_Target_Finder(current);
+    bool is_hit = Hit_Calculator(closest_index);
+    Update_Battery_Life();
+    UpdateCompass(closest_index);
+    sendData(radar);  
 
-  sendData(radar);
+    Serial.print(" | Current: ");
+    Serial.print(current.x, 3);
+    Serial.print(", ");
+    Serial.print(current.y, 3);
 
-  Serial.print(" | current: ");
-  Serial.print(current.x, 3);
-  Serial.print(", ");
-  Serial.print(current.y, 3);
-  //Serial.print(", ");
-  //Serial.print(current.z, 3);
+    Serial.print(" | Battery life: ");
+    Serial.print(battery_life);
+    Serial.print(" | Radar: ");
+    Serial.print(radar);
+    
+    if (closest_index != -1) {
+      Serial.print(" | Closest point: ");
+      Serial.print(points[closest_index].name);
+    }
 
-  Serial.print(" | Battery life: ");
-  Serial.print(battery_life);
-  Serial.print(" | Radar: ");
-  Serial.print(radar);
-  
-  if (closest_index != -1) {
-    Serial.print(" | Closest point: ");
-    Serial.print(points[closest_index].name);
-  }
+    if(is_hit) {
+      Serial.print(" | Target Hit!");
+      digitalWrite(v1Pin, HIGH);
+      digitalWrite(v2Pin, HIGH);
+    } else {
+      digitalWrite(v1Pin, LOW);
+      digitalWrite(v2Pin, LOW);
+    }
 
-  if(is_hit) {
-    Serial.print(" | Target Hit!");
-    digitalWrite(v1Pin, HIGH);
-    digitalWrite(v2Pin, HIGH);
-  } else {
-    digitalWrite(v1Pin, LOW);
-    digitalWrite(v2Pin, LOW);
-  }
-
-  Serial.println();
+    Serial.println();
 
     if (battery_life == 0) {
 
-        digitalWrite(v1Pin, LOW);
-        digitalWrite(v2Pin, LOW);
-        TURN_ALL_RED();
-        sendData(radar);
-        delay(10000);
-        TURN_ALL_GREEN();
-        sendData(radar);
-        delay(10000);
+      digitalWrite(v1Pin, LOW);
+      digitalWrite(v2Pin, LOW);
+      TURN_ALL_RED();
+      sendData(radar);
+      delay(10000);
+      TURN_ALL_GREEN();
+      sendData(radar);
+      delay(10000);
+    }
+
+
+  } else{
+    Serial.println("YOU WIN");
+    //CAN ADD SERVO CODE HERE
   }
+
 
   delay(200);
 }
