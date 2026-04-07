@@ -23,18 +23,16 @@ uint16_t radar = 0; // 16 bits for 2 shift registers (8 LEDs × 2 outputs per LE
 #define TURN_ALL_GREEN() (radar = 0xAAAA)  // Turn all radar LEDs green
 #define TURN_OFF_RADAR() (radar = 0) // Turn off radar
 
-int servoPos = 90; // init servo position
+int servoPos = 60; // init servo position
 
 float x, y;
 const float a = 0.2;
 float current_dot_product;
 
 bool Target_is_Hit = false;
-int battery_life = 2; // init 1 led on 1 led flickering
+int battery_life = 3; // init 1 led on 1 led flickering
 bool prevHit = false;
 bool Win_State=false;
-
-bool flickering = false;
 
 unsigned long hitStartTime = 0;
 bool timingHit = false;
@@ -59,7 +57,8 @@ Vec3 current;
 TargetPoint points[] = {
   {"H1", {0.0, 1.0}},
   {"R2", {1.0, 0.0}},
-  {"H3", {0.0, -1.0}}
+  {"H3", {0.0, -1.0}},
+  {"R4", {-1.0, 0.0}}
 
 };
 
@@ -187,6 +186,16 @@ void Update_Battery_Life() {
 bool Hit_Calculator(int closest_index) {
   // the dot product being near equal to 1 means we are pointing at the point
 
+  //safety check for the setup/no points found
+  if (closest_index == -1) {
+    Target_is_Hit = false;
+    timingHit = false;
+    prevHit = false;
+    TURN_OFF_RADAR();
+    myservo.write(60);
+    return false;
+  }
+
   Target_is_Hit = (current_dot_product > 0.97);
 
   //just started hitting
@@ -200,6 +209,8 @@ bool Hit_Calculator(int closest_index) {
     timingHit = false;
     prevHit = false;
     TURN_OFF_RADAR();
+    //servo reset
+    myservo.write(60); //NEUTRAL ANGLE 60
     return false;
   }
 
@@ -211,12 +222,12 @@ bool Hit_Calculator(int closest_index) {
   if (points[closest_index].name[0] == 'H') {
     requiredTime = 2000; // 2 seconds for hit
     TURN_ALL_RED();
-    //ADD SERVO CODE HERE
+    myservo.write(0); //HIT ANGLE 0
 
   } else if (points[closest_index].name[0] == 'R') {
     requiredTime = 3000; // 3 seconds for recharge
     TURN_ALL_GREEN();
-    //ADD SERVO CODE HERE
+    myservo.write(120); //RECHARGE ANGLE 120
   }
 
   Serial.print("Hold time: ");
@@ -279,11 +290,9 @@ void setup() {
   movement.begin();
 
   // Initialize the first reading
-  movement.update();
-  x=movement.getX();
-  y=movement.getY();
-
   current = Normalize({x, y});
+  x = current.x;
+  y = current.y;
 
   // Set battery LED pins as outputs
   pinMode(b1Pin, OUTPUT);
@@ -302,6 +311,7 @@ void setup() {
   myservo.attach(9); // Attach servo to pin 9
   myservo.write(servoPos); // Set initial servo position
 
+  Update_Flicker();
   Update_Battery_Life();
   TURN_OFF_RADAR();
 
@@ -321,6 +331,7 @@ void loop() {
   if(!Win_State){
     int closest_index = Closest_Target_Finder(current);
     bool is_hit = Hit_Calculator(closest_index);
+    Update_Flicker();
     Update_Battery_Life();
     UpdateCompass(closest_index);
     sendData(radar);  
@@ -366,7 +377,7 @@ void loop() {
 
   } else{
     Serial.println("YOU WIN");
-    //CAN ADD SERVO CODE HERE
+    myservo.write(180); //WIN ANGLE 180
   }
 
 
