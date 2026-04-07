@@ -57,8 +57,8 @@ Vec3 current;
 TargetPoint points[] = {
   {"H1", {0.0, 1.0}},
   {"R2", {1.0, 0.0}},
-  {"H3", {0.0, -1.0}},
-  {"R4", {-1.0, 0.0}}
+  {"H3", {0.0, -1.0}}
+  //{"R4", {-1.0, 0.0}}
 
 };
 
@@ -192,7 +192,8 @@ bool Hit_Calculator(int closest_index) {
     timingHit = false;
     prevHit = false;
     TURN_OFF_RADAR();
-    myservo.write(60);
+    servoPos=60;
+    myservo.write(servoPos);
     return false;
   }
 
@@ -210,7 +211,8 @@ bool Hit_Calculator(int closest_index) {
     prevHit = false;
     TURN_OFF_RADAR();
     //servo reset
-    myservo.write(60); //NEUTRAL ANGLE 60
+    servoPos=60;
+    myservo.write(servoPos); //NEUTRAL ANGLE 60
     return false;
   }
 
@@ -222,12 +224,14 @@ bool Hit_Calculator(int closest_index) {
   if (points[closest_index].name[0] == 'H') {
     requiredTime = 2000; // 2 seconds for hit
     TURN_ALL_RED();
-    myservo.write(0); //HIT ANGLE 0
+    servoPos=0;
+    myservo.write(servoPos); //HIT ANGLE 0
 
   } else if (points[closest_index].name[0] == 'R') {
     requiredTime = 3000; // 3 seconds for recharge
     TURN_ALL_GREEN();
-    myservo.write(120); //RECHARGE ANGLE 120
+    servoPos=120;
+    myservo.write(servoPos); //RECHARGE ANGLE 120
   }
 
   Serial.print("Hold time: ");
@@ -250,6 +254,40 @@ bool Hit_Calculator(int closest_index) {
   return Target_is_Hit;
 }
 
+String getDirAtanMethod(Vec3 current, Vec3 target) {
+  float angleCurrent = atan2(current.y, current.x) * 180.0 / PI;
+  float angleTarget  = atan2(target.y, target.x) * 180.0 / PI;
+  float angleDiff = angleTarget - angleCurrent;
+
+  // Normalize to [-180, 180]
+  while (angleDiff > 180) angleDiff -= 360;
+  while (angleDiff < -180) angleDiff += 360;
+
+  if (angleDiff >= -45 && angleDiff < 45) {
+    return "UP";       // target is in front
+  } 
+  else if (angleDiff >= 45 && angleDiff < 135) {
+    return "LEFT";
+  } 
+  else if (angleDiff >= -135 && angleDiff < -45) {
+    return "RIGHT";
+  } 
+  else {
+    return "DOWN";
+  }
+}
+
+String getDirCrossMethod(Vec3 target, Vec3 current) {
+  float cross = current.x * target.y - current.y * target.x;
+  float dot = DotProduct(current, target);
+
+  if (fabs(cross) > fabs(dot)) {
+    return (cross > 0) ? "LEFT" : "RIGHT";
+  } else {
+    return (dot > 0) ? "UP" : "DOWN";
+  }
+}
+
 void UpdateCompass(int closest_index){
 
   if(closest_index== -1){
@@ -259,28 +297,17 @@ void UpdateCompass(int closest_index){
   Vec3 target = Normalize(points[closest_index].dir);
   Vec3 cur = Normalize(current);
 
+  /*
   float currX = cur.x;
   float currY = cur.y;
   float tarX = target.x;
   float tarY = target.y;
+  */
 
 
-  float dot=DotProduct(cur,target); //can be set as param if needed
-  float cross=currX*tarY - currY*tarX;
+  Serial.println(getDirCrossMethod(target, cur));
+  Serial.println(getDirAtanMethod(cur, target));
 
-  if(fabs(cross)>fabs(dot)){
-    if (cross > 0) {
-      Serial.println("LEFT");
-    } else {
-      Serial.println("RIGHT");
-    }
-  } else {
-    if (dot > 0) {
-      Serial.println("UP");
-    } else {
-      Serial.println("DOWN");
-    }
-  }
 
 }
 
@@ -290,6 +317,11 @@ void setup() {
   movement.begin();
 
   // Initialize the first reading
+  movement.update();
+
+  x = movement.getX();
+  y = movement.getY();
+
   current = Normalize({x, y});
   x = current.x;
   y = current.y;
@@ -327,6 +359,9 @@ void loop() {
   x = a * newVec.x + (1 - a) * x;
   y = a * newVec.y + (1 - a) * y;
   current = Normalize({x, y});
+
+  Serial.print("debug servo pos:  ");
+  Serial.print(servoPos);
 
   if(!Win_State){
     int closest_index = Closest_Target_Finder(current);
@@ -377,7 +412,8 @@ void loop() {
 
   } else{
     Serial.println("YOU WIN");
-    myservo.write(180); //WIN ANGLE 180
+    servoPos=180;
+    myservo.write(servoPos); //WIN ANGLE 180
   }
 
 
