@@ -1,6 +1,21 @@
 #include "Modulino.h"
 #include "Servo.h"
 
+uint16_t radar = 0; // 16 bits for 2 shift registers (8 LEDs × 2 outputs per LED)
+
+
+#include "SequencePlayer.h"
+SequencePlayer sequencePlayer(&radar);
+
+/*
+Step introSequence[] = {
+  {DIR_UP, 2000},
+  {DIR_LEFT, 3000},
+  {DIR_RIGHT, 1000},
+  {DIR_DOWN, 2000}
+};
+*/
+
 ModulinoMovement movement;
 Servo myservo;
 
@@ -15,7 +30,7 @@ const int dataPin = 8;   // DS
 const int latchPin = 12; // ST_CP
 const int clockPin = 13; // SH_CP
 
-uint16_t radar = 0; // 16 bits for 2 shift registers (8 LEDs × 2 outputs per LED)
+int led=10;
 
 #define SET_RADAR(led)   (radar |= (1 << led)) // Turn on specific radar LED
 #define CLEAR_RADAR(led) (radar &= ~(1 << led)) // Turn off specific radar LED
@@ -23,7 +38,8 @@ uint16_t radar = 0; // 16 bits for 2 shift registers (8 LEDs × 2 outputs per LE
 #define TURN_ALL_GREEN() (radar = 0xAAAA)  // Turn all radar LEDs green
 #define TURN_OFF_RADAR() (radar = 0) // Turn off radar
 
-int servoPos = 60; // init servo position
+int servoPos = 60;
+//0: hit, 60: neutral, 120: recharge, 180: win state
 
 float x, y;
 const float a = 0.2;
@@ -57,8 +73,8 @@ Vec3 current;
 TargetPoint points[] = {
   {"H1", {0.0, 1.0}},
   {"R2", {1.0, 0.0}},
-  {"H3", {0.0, -1.0}}
-  //{"R4", {-1.0, 0.0}}
+  {"H3", {0.0, -1.0}},
+  {"R4", {0.5, 0.0}}
 
 };
 
@@ -191,7 +207,6 @@ bool Hit_Calculator(int closest_index) {
     Target_is_Hit = false;
     timingHit = false;
     prevHit = false;
-    TURN_OFF_RADAR();
     servoPos=60;
     myservo.write(servoPos);
     return false;
@@ -209,7 +224,7 @@ bool Hit_Calculator(int closest_index) {
   if (!Target_is_Hit) {
     timingHit = false;
     prevHit = false;
-    TURN_OFF_RADAR();
+    //TURN_OFF_RADAR();
     //servo reset
     servoPos=60;
     myservo.write(servoPos); //NEUTRAL ANGLE 60
@@ -223,13 +238,13 @@ bool Hit_Calculator(int closest_index) {
 
   if (points[closest_index].name[0] == 'H') {
     requiredTime = 2000; // 2 seconds for hit
-    TURN_ALL_RED();
+    //TURN_ALL_RED();
     servoPos=0;
     myservo.write(servoPos); //HIT ANGLE 0
 
   } else if (points[closest_index].name[0] == 'R') {
     requiredTime = 3000; // 3 seconds for recharge
-    TURN_ALL_GREEN();
+    //TURN_ALL_GREEN();
     servoPos=120;
     myservo.write(servoPos); //RECHARGE ANGLE 120
   }
@@ -254,7 +269,7 @@ bool Hit_Calculator(int closest_index) {
   return Target_is_Hit;
 }
 
-String getDirAtanMethod(Vec3 current, Vec3 target) {
+String getDirAtanMethod(Vec3 target, Vec3 current) {
   float angleCurrent = atan2(current.y, current.x) * 180.0 / PI;
   float angleTarget  = atan2(target.y, target.x) * 180.0 / PI;
   float angleDiff = angleTarget - angleCurrent;
@@ -264,7 +279,7 @@ String getDirAtanMethod(Vec3 current, Vec3 target) {
   while (angleDiff < -180) angleDiff += 360;
 
   if (angleDiff >= -45 && angleDiff < 45) {
-    return "UP";       // target is in front
+    return "UP"; // target is in front
   } 
   else if (angleDiff >= 45 && angleDiff < 135) {
     return "LEFT";
@@ -282,9 +297,29 @@ String getDirCrossMethod(Vec3 target, Vec3 current) {
   float dot = DotProduct(current, target);
 
   if (fabs(cross) > fabs(dot)) {
-    return (cross > 0) ? "LEFT" : "RIGHT";
+    if(cross > 0){
+      //TURN_OFF_RADAR();
+      //TURN_ALL_RED();
+      //SET_RADAR(1); //LEFT
+      Serial.println("AAAAAAAAAA");
+      return "LEFT";
+
+    } else {
+      //TURN_OFF_RADAR();
+      //SET_RADAR(2); //RIGHT
+      return "RIGHT";
+
+    }
   } else {
-    return (dot > 0) ? "UP" : "DOWN";
+    if(dot > 0){
+      //TURN_OFF_RADAR();
+      //SET_RADAR(3); //UP
+      return "UP";
+    } else {
+      //TURN_OFF_RADAR();
+      //SET_RADAR(5); //DOWN
+      return "DOWN";
+    }
   }
 }
 
@@ -297,17 +332,8 @@ void UpdateCompass(int closest_index){
   Vec3 target = Normalize(points[closest_index].dir);
   Vec3 cur = Normalize(current);
 
-  /*
-  float currX = cur.x;
-  float currY = cur.y;
-  float tarX = target.x;
-  float tarY = target.y;
-  */
-
-
   Serial.println(getDirCrossMethod(target, cur));
-  Serial.println(getDirAtanMethod(cur, target));
-
+  //Serial.println(getDirAtanMethod(target, cur));
 
 }
 
@@ -343,15 +369,32 @@ void setup() {
   myservo.attach(9); // Attach servo to pin 9
   myservo.write(servoPos); // Set initial servo position
 
-  Update_Flicker();
   Update_Battery_Life();
-  TURN_OFF_RADAR();
+  //TURN_OFF_RADAR();
+
+  //sequencePlayer.start(introSequence, sizeof(introSequence) / sizeof(introSequence[0]));
+
 
 }
 
 void loop() {
   movement.update();
 
+
+  for (int i = 0; i < 16; i++) {
+    radar = (1 << i);
+
+    Serial.print("bit ");
+    Serial.print(i);
+    Serial.print(" -> ");
+    Serial.println(radar, BIN);
+
+    sendData(radar);
+    delay(1500);
+  }
+
+  //sequencePlayer.update();
+  
   Vec3 newVec = {movement.getX(), movement.getY()};
   newVec = Normalize(newVec);
 
@@ -360,8 +403,6 @@ void loop() {
   y = a * newVec.y + (1 - a) * y;
   current = Normalize({x, y});
 
-  Serial.print("debug servo pos:  ");
-  Serial.print(servoPos);
 
   if(!Win_State){
     int closest_index = Closest_Target_Finder(current);
@@ -401,10 +442,10 @@ void loop() {
 
       digitalWrite(v1Pin, LOW);
       digitalWrite(v2Pin, LOW);
-      TURN_ALL_RED();
+      //TURN_ALL_RED();
       sendData(radar);
       delay(10000);
-      TURN_ALL_GREEN();
+      //TURN_ALL_GREEN();
       sendData(radar);
       delay(10000);
     }
@@ -418,5 +459,6 @@ void loop() {
 
 
   delay(200);
+  
 }
 
